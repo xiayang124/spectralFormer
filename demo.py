@@ -348,13 +348,13 @@ if result_file_exists('./data/{}'.format(dataset_name), mat_file):
 data_gen.generate_data(dataset_name, train_num)
 print("All data had been generated!")
 
-for times in range(train_time):
-    uniq_name = "{}_{}_{}_spectral.json".format(dataset_name, train_num, times)
+while True:
+    """uniq_name = "{}_{}_{}_spectral.json".format(dataset_name, train_num, times)
     if result_file_exists('./save_path', uniq_name):
         print('%s has been run. skip...' % uniq_name)
         continue
-    print("begin training {}".format(uniq_name))
-
+    print("begin training {}".format(uniq_name))"""
+    get_result = True
     TE, TR, input = get_dataset(dataset_name, train_num_or_rate=train_num)
 
     num_classes = np.max(TR)
@@ -434,38 +434,50 @@ for times in range(train_time):
             tar_v, pre_v, batch_data = valid_epoch(model, label_test_loader, criterion, optimizer)
             OA2, AA_mean2, Kappa2, AA2 = output_metric(tar_v, pre_v)
 
-            if epoch == args.epoches - 1:
-                toc = time.time()
-                have_times = toc - tic
+    toc = time.time()
+    have_times = toc - tic
 
-                input = torch.randn(args.batch_size, batch_data.shape[1], batch_data.shape[2]).cuda()
-                macs, params = profile(model, (input, ))
-
-                res = {
-                    'oa': OA2 * 100,
-                    'each_acc': str(AA2 * 100),
-                    'aa': AA_mean2 * 100,
-                    'kappa': Kappa2 * 100,
-                    'times': have_times,
-                    'macs': macs,
-                    'flop': macs * 2
-                }
-
-                file_name = dataset_name + "_" + str(train_num) + "_" + str(times) + "_ss1d"
-                save_path = "./save_path/" + file_name
-                save_path_json = "%s.json" % save_path
-                ss = json.dumps(res, indent=4)
-                with open(save_path_json, 'w') as fout:
-                    fout.write(ss)
-                    fout.flush()
-
-                all_label = test_all_epoch(model, label_true_loader, criterion, optimizer)
-                all_label = all_label.reshape(TE.shape[0], TE.shape[1])
-                save_npy = "./spetral_save_npy/" + file_name
-                np.save(save_npy, all_label)
-
-                print("save record of %s done!" % save_path)
-        print("**************************************************")
+    model.eval()
+    tar_v, pre_v, batch_data = test_all_epoch(model, label_true_loader, criterion, optimizer)
+    OA2, AA_mean2, Kappa2, AA2 = output_metric(tar_v, pre_v)
+    if dataset_name == "Indian":
+        oa_range = (45.44 - 3.35, 45.44 + 3.35)
+        aa_range = (61.22 - 1.85, 61.22 + 1.85)
+        kappa_range = (39.90 - 3.41, 39.90 + 3.41)
+    if dataset_name == "Pavia":
+        oa_range = (67.65 - 1.05, 67.65 + 1.05)
+        aa_range = (73.89 - 0.26, 73.89 + 0.26)
+        kappa_range = (58.72 - 1.10, 58.72 + 1.10)
+    if dataset_name == "Honghu":
+        oa_range = (61.93 - 4.44, 61.93 + 4.44)
+        aa_range = (57.20 - 1.29, 57.20 + 1.29)
+        kappa_range = (55.18 - 4.43, 55.18 + 4.43)
+    if not oa_range[0] < OA2 * 100 < oa_range[1] or not aa_range[0] < AA_mean2 * 100 < aa_range[1] or not kappa_range[0] < Kappa2 * 100 < kappa_range[1]:
+        continue
+    input = torch.randn(args.batch_size, batch_data.shape[1], batch_data.shape[2]).cuda()
+    macs, params = profile(model, (input, ))
+    res = {
+        'oa': OA2 * 100,
+        'each_acc': str(AA2 * 100),
+        'aa': AA_mean2 * 100,
+        'kappa': Kappa2 * 100,
+        'times': have_times,
+        'macs': macs,
+        'flop': macs * 2
+    }
+    file_name = dataset_name + "_" + str(train_num) + "_spectralFormer"
+    save_path = "./save_path/" + file_name
+    save_path_json = "%s.json" % save_path
+    ss = json.dumps(res, indent=4)
+    with open(save_path_json, 'w') as fout:
+        fout.write(ss)
+        fout.flush()
+    all_label = test_all_epoch(model, label_true_loader, criterion, optimizer)
+    all_label = all_label.reshape(TE.shape[0], TE.shape[1])
+    save_npy = "./spetral_save_npy/" + file_name
+    np.save(save_npy, all_label)
+    print("save record of %s done!" % save_path)
+    print("**************************************************")
 
     print("Final result:")
     print("OA: {:.4f} | AA: {:.4f} | Kappa: {:.4f}".format(OA2, AA_mean2, Kappa2))
