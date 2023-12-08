@@ -281,8 +281,6 @@ def valid_epoch(model, valid_loader, criterion, optimizer):
 
 
 def test_all_epoch(model, all_loader, criterion, optimizer):
-    objs = AvgrageMeter()
-    top1 = AvgrageMeter()
     tar = np.array([])
     pre = np.array([])
     for batch_idx, (batch_data, batch_target) in enumerate(all_loader):
@@ -291,10 +289,12 @@ def test_all_epoch(model, all_loader, criterion, optimizer):
 
         batch_pred = model(batch_data)
 
-        _, pred = batch_pred.topk(1, 1, True, True)
-        pp = pred.squeeze()
-        pre = np.append(pre, pp.data.cpu().numpy())
-    return pre
+        _, t, p = accuracy(batch_pred, batch_target, topk=(1,))
+        n = batch_data.shape[0]
+
+        tar = np.append(tar, t.data.cpu().numpy())
+        pre = np.append(pre, p.data.cpu().numpy())
+    return tar, pre, batch_data
 
 
 # -------------------------------------------------------------------------------
@@ -472,7 +472,7 @@ while True:
     with open(save_path_json, 'w') as fout:
         fout.write(ss)
         fout.flush()
-    all_label = test_all_epoch(model, label_true_loader, criterion, optimizer)
+    _, all_label, _ = test_all_epoch(model, label_true_loader, criterion, optimizer)
     all_label = all_label.reshape(TE.shape[0], TE.shape[1])
     save_npy = "./spetral_save_npy/" + file_name
     np.save(save_npy, all_label)
