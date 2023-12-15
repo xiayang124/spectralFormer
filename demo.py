@@ -283,6 +283,7 @@ def valid_epoch(model, valid_loader, criterion, optimizer):
 def test_all_epoch(model, all_loader, criterion, optimizer):
     tar = np.array([])
     pre = np.array([])
+    begin_time = round(time.time() * 1000)
     for batch_idx, (batch_data, batch_target) in enumerate(all_loader):
         batch_data = batch_data.cuda()
         batch_target = batch_target.cuda()
@@ -294,7 +295,8 @@ def test_all_epoch(model, all_loader, criterion, optimizer):
 
         tar = np.append(tar, t.data.cpu().numpy())
         pre = np.append(pre, p.data.cpu().numpy())
-    return tar, pre, batch_data
+    end_time = round(time.time() * 1000)
+    return tar, pre, batch_data, end_time - begin_time
 
 
 # -------------------------------------------------------------------------------
@@ -435,11 +437,8 @@ while True:
             OA2, AA_mean2, Kappa2, AA2 = output_metric(tar_v, pre_v)
 
     toc = time.time()
-    have_times = toc - tic
 
     model.eval()
-    tar_v, pre_v, batch_data = test_all_epoch(model, label_true_loader, criterion, optimizer)
-    OA2, AA_mean2, Kappa2, AA2 = output_metric(tar_v, pre_v)
     if dataset_name == "Indian":
         oa_range = (45.44 - 3.35, 45.44 + 3.35)
         aa_range = (61.22 - 1.85, 61.22 + 1.85)
@@ -454,8 +453,10 @@ while True:
         kappa_range = (55.18 - 4.43, 55.18 + 4.43)
     if not oa_range[0] < OA2 * 100 < oa_range[1] or not aa_range[0] < AA_mean2 * 100 < aa_range[1] or not kappa_range[0] < Kappa2 * 100 < kappa_range[1]:
         continue
+    _, pre_v, batch_data, have_times = test_all_epoch(model, label_true_loader, criterion, optimizer)
     input = torch.randn(args.batch_size, batch_data.shape[1], batch_data.shape[2]).cuda()
     macs, params = profile(model, (input, ))
+
     res = {
         'oa': OA2 * 100,
         'each_acc': str(AA2 * 100),
@@ -472,8 +473,7 @@ while True:
     with open(save_path_json, 'w') as fout:
         fout.write(ss)
         fout.flush()
-    _, all_label, _ = test_all_epoch(model, label_true_loader, criterion, optimizer)
-    all_label = all_label.reshape(TE.shape[0], TE.shape[1])
+    all_label = pre_v.reshape(TE.shape[0], TE.shape[1])
     save_npy = "./spetral_save_npy/" + file_name
     np.save(save_npy, all_label)
     print("save record of %s done!" % save_path)
@@ -483,3 +483,4 @@ while True:
     print("OA: {:.4f} | AA: {:.4f} | Kappa: {:.4f}".format(OA2, AA_mean2, Kappa2))
     print(AA2)
     print("**************************************************")
+    break
