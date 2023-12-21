@@ -452,7 +452,6 @@ while True:
     print(str(OA2) + "\n" + str(AA_mean2) + "\n" + str(Kappa2) + "\n")
     if not oa_range[0] < OA2 * 100 < oa_range[1] or not aa_range[0] < AA_mean2 * 100 < aa_range[1] or not kappa_range[0] < Kappa2 * 100 < kappa_range[1]:
         continue
-    # No problem ↑
     tar_v, pre_v, batch_data, have_times = test_all_epoch(label_true_loader)
     input = torch.randn(args.batch_size, batch_data.shape[1], batch_data.shape[2]).cuda()
     macs, params = profile(model, (input, ))
@@ -468,8 +467,7 @@ while True:
     }
     # np.save("./spetral_save_npy/special_Indian_save.pred.npy", pre_v)
     # np.save("./spetral_save_npy/special_Indian_save_target.pred.npy", tar_v)
-    # No problem ↓
-    file_name = dataset_name + "_" + str(train_num) + "_spectralFormer"
+    file_name = dataset_name.lower() + "_SpectralFormer.pred"
     save_path = "./save_path/" + file_name
     save_path_json = "%s.json" % save_path
     ss = json.dumps(res, indent=4)
