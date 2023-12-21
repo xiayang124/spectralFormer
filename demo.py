@@ -37,7 +37,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_id)
 
 # -------------------------------------------------------------------------------
 # 定位训练和测试样本
-def chooose_train_and_test_point(train_data, test_data, true_data, num_classes):
+def chooose_train_and_test_point(train_data, test_data, true_data, num_classes, shape):
     number_train = []
     pos_train = {}
     number_test = []
@@ -67,15 +67,16 @@ def chooose_train_and_test_point(train_data, test_data, true_data, num_classes):
         total_pos_test = np.r_[total_pos_test, pos_test[i]]  # (9671,2)
     total_pos_test = total_pos_test.astype(int)
     # --------------------------for true data------------------------------------
-    for i in range(num_classes + 1):
-        each_class = []
-        each_class = np.argwhere(true_data == i)
-        number_true.append(each_class.shape[0])
-        pos_true[i] = each_class
+    list_sec = np.array([])
+    list_fir = np.array([i for i in range(shape[0])]).reshape(-1, 1)
+    for i in range(shape[1]):
+        list_sec = np.append(list_sec, i)
+    list_left = list_sec.reshape(-1, 1)
+    for i in range(shape[0] - 1):
+        list_sec = np.concatenate((list_left, list_sec.reshape(-1, 1)))
+    list_fir = np.repeat(list_fir, repeats=shape[1], axis=1).reshape(-1, 1)
+    total_pos_true = np.concatenate((list_fir, list_sec), axis=1)
 
-    total_pos_true = pos_true[0]
-    for i in range(1, num_classes + 1):
-        total_pos_true = np.r_[total_pos_true, pos_true[i]]
     total_pos_true = total_pos_true.astype(int)
 
     return total_pos_train, total_pos_test, total_pos_true, number_train, number_test, number_true
@@ -183,9 +184,6 @@ def train_and_test_label(number_train, number_test, number_true, num_classes):
             y_train.append(i)
         for k in range(number_test[i]):
             y_test.append(i)
-    for i in range(num_classes + 1):
-        for j in range(number_true[i]):
-            y_true.append(i)
     y_train = np.array(y_train)
     y_test = np.array(y_test)
     y_true = np.array(y_true)
@@ -231,7 +229,7 @@ def accuracy(output, target, topk=(1,)):
 
 # -------------------------------------------------------------------------------
 # train model
-def train_epoch(model, train_loader, criterion, optimizer):
+def train_epoch(train_loader, criterion, optimizer):
     objs = AvgrageMeter()
     top1 = AvgrageMeter()
     tar = np.array([])
@@ -257,7 +255,7 @@ def train_epoch(model, train_loader, criterion, optimizer):
 
 # -------------------------------------------------------------------------------
 # validate model
-def valid_epoch(model, valid_loader, criterion, optimizer):
+def valid_epoch(valid_loader, criterion, optimizer):
     objs = AvgrageMeter()
     top1 = AvgrageMeter()
     tar = np.array([])
@@ -280,7 +278,7 @@ def valid_epoch(model, valid_loader, criterion, optimizer):
     return tar, pre, batch_data
 
 
-def test_all_epoch(model, all_loader, criterion, optimizer):
+def test_all_epoch(all_loader):
     tar = np.array([])
     pre = np.array([])
     begin_time = round(time.time() * 1000)
@@ -291,7 +289,6 @@ def test_all_epoch(model, all_loader, criterion, optimizer):
         batch_pred = model(batch_data)
 
         _, t, p = accuracy(batch_pred, batch_target, topk=(1,))
-        n = batch_data.shape[0]
 
         tar = np.append(tar, t.data.cpu().numpy())
         pre = np.append(pre, p.data.cpu().numpy())
@@ -374,13 +371,14 @@ while True:
     # -------------------------------------------------------------------------------
     # obtain train and test data
     total_pos_train, total_pos_test, total_pos_true, number_train, number_test, number_true = chooose_train_and_test_point(
-        TR, TE, label, num_classes)
+        TR, TE, label, num_classes, input.shape)
 
     mirror_image = mirror_hsi(height, width, band, input_normalize, patch=args.patches)
     x_train_band, x_test_band, x_true_band = train_and_test_data(mirror_image, band, total_pos_train, total_pos_test,
                                                                  total_pos_true, patch=args.patches,
                                                                  band_patch=args.band_patches)
-    y_train, y_test, y_true = train_and_test_label(number_train, number_test, number_true, num_classes)
+    y_train, y_test, _ = train_and_test_label(number_train, number_test, number_true, num_classes)
+    y_true = label
     # -------------------------------------------------------------------------------
     # load data
     x_train = torch.from_numpy(x_train_band.transpose(0, 2, 1)).type(torch.FloatTensor)  # [695, 200, 7, 7]
@@ -390,7 +388,7 @@ while True:
     y_test = torch.from_numpy(y_test).type(torch.LongTensor)  # [9671]
     Label_test = Data.TensorDataset(x_test, y_test)
     x_true = torch.from_numpy(x_true_band.transpose(0, 2, 1)).type(torch.FloatTensor)
-    y_true = torch.from_numpy(y_true).type(torch.LongTensor)
+    y_true = torch.from_numpy(y_true.reshape(-1, )).type(torch.LongTensor)
     Label_true = Data.TensorDataset(x_true, y_true)
 
     label_train_loader = Data.DataLoader(Label_train, batch_size=args.batch_size, shuffle=True)
@@ -425,7 +423,7 @@ while True:
     for epoch in range(args.epoches):
         # train model
         model.train()
-        train_acc, train_obj, tar_t, pre_t = train_epoch(model, label_train_loader, criterion, optimizer)
+        train_acc, train_obj, tar_t, pre_t = train_epoch(label_train_loader, criterion, optimizer)
         OA1, AA_mean1, Kappa1, AA1 = output_metric(tar_t, pre_t)
         print("Epoch: {:03d} train_loss: {:.4f} train_acc: {:.4f}"
               .format(epoch + 1, train_obj, train_acc))
@@ -433,7 +431,7 @@ while True:
 
         if (epoch % args.test_freq == 0) | (epoch == args.epoches - 1):
             model.eval()
-            tar_v, pre_v, batch_data = valid_epoch(model, label_test_loader, criterion, optimizer)
+            tar_v, pre_v, batch_data = valid_epoch(label_test_loader, criterion, optimizer)
             OA2, AA_mean2, Kappa2, AA2 = output_metric(tar_v, pre_v)
 
     toc = time.time()
@@ -451,9 +449,11 @@ while True:
         oa_range = (61.93 - 4.44, 61.93 + 4.44)
         aa_range = (57.20 - 1.29, 57.20 + 1.29)
         kappa_range = (55.18 - 4.43, 55.18 + 4.43)
+    print(str(OA2) + "\n" + str(AA_mean2) + "\n" + str(Kappa2) + "\n")
     if not oa_range[0] < OA2 * 100 < oa_range[1] or not aa_range[0] < AA_mean2 * 100 < aa_range[1] or not kappa_range[0] < Kappa2 * 100 < kappa_range[1]:
         continue
-    _, pre_v, batch_data, have_times = test_all_epoch(model, label_true_loader, criterion, optimizer)
+    # No problem ↑
+    tar_v, pre_v, batch_data, have_times = test_all_epoch(label_true_loader)
     input = torch.randn(args.batch_size, batch_data.shape[1], batch_data.shape[2]).cuda()
     macs, params = profile(model, (input, ))
 
@@ -466,6 +466,9 @@ while True:
         'macs': macs,
         'flop': macs * 2
     }
+    # np.save("./spetral_save_npy/special_Indian_save.pred.npy", pre_v)
+    # np.save("./spetral_save_npy/special_Indian_save_target.pred.npy", tar_v)
+    # No problem ↓
     file_name = dataset_name + "_" + str(train_num) + "_spectralFormer"
     save_path = "./save_path/" + file_name
     save_path_json = "%s.json" % save_path
@@ -473,6 +476,7 @@ while True:
     with open(save_path_json, 'w') as fout:
         fout.write(ss)
         fout.flush()
+
     all_label = pre_v.reshape(TE.shape[0], TE.shape[1])
     save_npy = "./spetral_save_npy/" + file_name
     np.save(save_npy, all_label)
