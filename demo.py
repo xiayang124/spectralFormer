@@ -347,7 +347,7 @@ if result_file_exists('./data/{}'.format(dataset_name), mat_file):
 data_gen.generate_data(dataset_name, train_num)
 print("All data had been generated!")
 
-while True:
+for train_times in range(train_time):
     """uniq_name = "{}_{}_{}_spectral.json".format(dataset_name, train_num, times)
     if result_file_exists('./save_path', uniq_name):
         print('%s has been run. skip...' % uniq_name)
@@ -374,7 +374,7 @@ while True:
         TR, TE, label, num_classes, input.shape)
 
     mirror_image = mirror_hsi(height, width, band, input_normalize, patch=args.patches)
-    x_train_band, x_test_band, x_true_band = train_and_test_data(mirror_image, band, total_pos_train, total_pos_test,
+    x_train_band, x_test_band, _ = train_and_test_data(mirror_image, band, total_pos_train, total_pos_test,
                                                                  total_pos_true, patch=args.patches,
                                                                  band_patch=args.band_patches)
     y_train, y_test, _ = train_and_test_label(number_train, number_test, number_true, num_classes)
@@ -387,13 +387,13 @@ while True:
     x_test = torch.from_numpy(x_test_band.transpose(0, 2, 1)).type(torch.FloatTensor)  # [9671, 200, 7, 7]
     y_test = torch.from_numpy(y_test).type(torch.LongTensor)  # [9671]
     Label_test = Data.TensorDataset(x_test, y_test)
-    x_true = torch.from_numpy(x_true_band.transpose(0, 2, 1)).type(torch.FloatTensor)
-    y_true = torch.from_numpy(y_true.reshape(-1, )).type(torch.LongTensor)
-    Label_true = Data.TensorDataset(x_true, y_true)
+    # x_true = torch.from_numpy(x_true_band.transpose(0, 2, 1)).type(torch.FloatTensor)
+    # y_true = torch.from_numpy(y_true.reshape(-1, )).type(torch.LongTensor)
+    # Label_true = Data.TensorDataset(x_true, y_true)
 
     label_train_loader = Data.DataLoader(Label_train, batch_size=args.batch_size, shuffle=True)
     label_test_loader = Data.DataLoader(Label_test, batch_size=args.batch_size, shuffle=True)
-    label_true_loader = Data.DataLoader(Label_true, batch_size=100, shuffle=False)
+    # label_true_loader = Data.DataLoader(Label_true, batch_size=100, shuffle=False)
 
     # -------------------------------------------------------------------------------
     # create model
@@ -437,22 +437,22 @@ while True:
     toc = time.time()
 
     model.eval()
-    if dataset_name == "Indian":
-        oa_range = (45.44 - 3.35, 45.44 + 3.35)
-        aa_range = (61.22 - 1.85, 61.22 + 1.85)
-        kappa_range = (39.90 - 3.41, 39.90 + 3.41)
-    if dataset_name == "Pavia":
-        oa_range = (67.65 - 1.05, 67.65 + 1.05)
-        aa_range = (73.89 - 0.26, 73.89 + 0.26)
-        kappa_range = (58.72 - 1.10, 58.72 + 1.10)
-    if dataset_name == "Honghu":
-        oa_range = (61.93 - 4.44, 61.93 + 4.44)
-        aa_range = (57.20 - 1.29, 57.20 + 1.29)
-        kappa_range = (55.18 - 4.43, 55.18 + 4.43)
+    # if dataset_name == "Indian":
+    #     oa_range = (45.44 - 3.35, 45.44 + 3.35)
+    #     aa_range = (61.22 - 1.85, 61.22 + 1.85)
+    #     kappa_range = (39.90 - 3.41, 39.90 + 3.41)
+    # if dataset_name == "Pavia":
+    #     oa_range = (67.65 - 1.05, 67.65 + 1.05)
+    #     aa_range = (73.89 - 0.26, 73.89 + 0.26)
+    #     kappa_range = (58.72 - 1.10, 58.72 + 1.10)
+    # if dataset_name == "Honghu":
+    #     oa_range = (61.93 - 4.44, 61.93 + 4.44)
+    #     aa_range = (57.20 - 1.29, 57.20 + 1.29)
+    #     kappa_range = (55.18 - 4.43, 55.18 + 4.43)
     print(str(OA2) + "\n" + str(AA_mean2) + "\n" + str(Kappa2) + "\n")
-    if not oa_range[0] < OA2 * 100 < oa_range[1] or not aa_range[0] < AA_mean2 * 100 < aa_range[1] or not kappa_range[0] < Kappa2 * 100 < kappa_range[1]:
-        continue
-    tar_v, pre_v, batch_data, have_times = test_all_epoch(label_true_loader)
+    # if not oa_range[0] < OA2 * 100 < oa_range[1] or not aa_range[0] < AA_mean2 * 100 < aa_range[1] or not kappa_range[0] < Kappa2 * 100 < kappa_range[1]:
+    #     continue
+    # tar_v, pre_v, batch_data, have_times = test_all_epoch(label_true_loader)
     input = torch.randn(args.batch_size, batch_data.shape[1], batch_data.shape[2]).cuda()
     macs, params = profile(model, (input, ))
 
@@ -461,23 +461,23 @@ while True:
         'each_acc': str(AA2 * 100),
         'aa': AA_mean2 * 100,
         'kappa': Kappa2 * 100,
-        'times': have_times,
+        # 'times': have_times,
         'macs': macs,
         'flop': macs * 2
     }
     # np.save("./spetral_save_npy/special_Indian_save.pred.npy", pre_v)
     # np.save("./spetral_save_npy/special_Indian_save_target.pred.npy", tar_v)
-    file_name = dataset_name.lower() + "_SpectralFormer.pred"
-    save_path = "./save_path/" + file_name
-    save_path_json = "%s.json" % save_path
+    # file_name = dataset_name.lower() + "_SpectralFormer.pred"
+    json_path = dataset_name.lower() + "_" + str(train_num) + "_" + str(train_times) + "_SpectralFormer.json"
+    save_path = "./save_path/" + json_path
     ss = json.dumps(res, indent=4)
-    with open(save_path_json, 'w') as fout:
+    with open(save_path, 'w') as fout:
         fout.write(ss)
         fout.flush()
 
-    all_label = pre_v.reshape(TE.shape[0], TE.shape[1])
-    save_npy = "./spetral_save_npy/" + file_name
-    np.save(save_npy, all_label)
+    # all_label = pre_v.reshape(TE.shape[0], TE.shape[1])
+    # save_npy = "./spetral_save_npy/" + file_name
+    # np.save(save_npy, all_label)
     print("save record of %s done!" % save_path)
     print("**************************************************")
 
@@ -485,4 +485,4 @@ while True:
     print("OA: {:.4f} | AA: {:.4f} | Kappa: {:.4f}".format(OA2, AA_mean2, Kappa2))
     print(AA2)
     print("**************************************************")
-    break
+    # break
